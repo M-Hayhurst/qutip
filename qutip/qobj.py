@@ -79,6 +79,8 @@ from qutip.cy.openmp.utilities import use_openmp
 if settings.has_openmp:
     from qutip.cy.openmp.omp_sparse_utils import omp_tidyup
 
+import qutip.dense
+
 
 class Qobj(object):
     """A class for representing quantum objects, such as quantum operators
@@ -210,7 +212,7 @@ class Qobj(object):
 
     def __init__(self, inpt=None, dims=[[], []], shape=[],
                  type=None, isherm=None, copy=True,
-                 fast=False, superrep=None, isunitary=None):
+                 fast=False, superrep=None, isunitary=None, isdense=False):
         """
         Qobj constructor.
         """
@@ -218,6 +220,7 @@ class Qobj(object):
         self._type = type
         self.superrep = superrep
         self._isunitary = isunitary
+        self._isdense = isdense
 
         if fast == 'mc':
             # fast Qobj construction for use in mcsolve with ket output
@@ -233,7 +236,12 @@ class Qobj(object):
             self._isherm = True
             return
 
-        if isinstance(inpt, Qobj):
+        if isinstance(inpt, np.ndarray) and self._isdense:
+            # new special case for dense matricies. Must be initialised with np array
+            self._data = inpt
+            self.dims = [[int(inpt.shape[0])], [int(inpt.shape[1])]]
+
+        elif isinstance(inpt, Qobj):
             # if input is already Qobj then return identical copy
 
             self._data = fast_csr_matrix((inpt.data.data, inpt.data.indices,
@@ -704,6 +712,10 @@ class Qobj(object):
         s = ""
         t = self.type
         shape = self.shape
+
+        if self._isdense:
+            s += 'Dense '
+
         if self.type in ['oper', 'super']:
             s += ("Quantum object: " +
                   "dims = " + str(self.dims) +
@@ -729,6 +741,9 @@ class Qobj(object):
             # sparse data string representation
             s += str(self.data)
 
+        if self._isdense:
+           if not (np.iscomplex(self.data)).any():
+            s += str(np.real(self.full()))
         elif all(np.imag(self.data.data) == 0):
             s += str(np.real(self.full()))
 
@@ -788,6 +803,10 @@ class Qobj(object):
         t = self.type
         shape = self.shape
         s = r''
+
+        if self._isdense:
+            s += 'Dense '
+
         if self.type in ['oper', 'super']:
             s += ("Quantum object: " +
                   "dims = " + str(self.dims) +
@@ -1883,8 +1902,10 @@ class Qobj(object):
             # used previously computed value
             return self._isherm
 
-        self._isherm = bool(zcsr_isherm(self.data))
-
+        if self._isdense:
+            self._isherm = qutip.dense.is_hermitian(self.data)
+        else:
+            self._isherm = bool(zcsr_isherm(self.data))
         return self._isherm
 
     @isherm.setter
