@@ -1,3 +1,5 @@
+Test to see if master equation solvers can be significantly faster if qobj used a dense representation (in the case of small hilbert spaces or non sparse problems).
+
 QuTiP: Quantum Toolbox in Python
 ================================
 
